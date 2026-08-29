@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from backend.app.chat import models as _chat_models
 from backend.app.config import get_settings
 from backend.app.models import Base
 

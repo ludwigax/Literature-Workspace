@@ -8,8 +8,8 @@ from fastapi import APIRouter, Query, Response, status
 from pydantic import BaseModel, Field
 
 from ..authorization.dependencies import CsrfProtected, CurrentActor, Database
-from ..catalogue.service import catalogue_service
 from ..collections.service import collection_service
+from ..library_items.service import library_item_service
 
 router = APIRouter(prefix="/libraries", tags=["catalogue"])
 
@@ -223,7 +223,7 @@ async def list_items(
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=500),
 ) -> dict[str, object]:
-    items, next_cursor = await catalogue_service.list_items(
+    items, next_cursor = await library_item_service.list_items(
         session,
         actor,
         library_id,
@@ -266,7 +266,7 @@ async def create_item(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.create_item(
+    return await library_item_service.create_item(
         session,
         actor,
         library_id,
@@ -286,7 +286,7 @@ async def bulk_organize_items(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.bulk_organize(
+    return await library_item_service.bulk_organize(
         session,
         actor,
         library_id,
@@ -303,7 +303,7 @@ async def get_item(
     session: Database,
     actor: CurrentActor,
 ) -> dict[str, object]:
-    return await catalogue_service.get_item(session, actor, library_id, library_item_id)
+    return await library_item_service.get_item(session, actor, library_id, library_item_id)
 
 
 @router.patch("/{library_id}/items/{library_item_id}")
@@ -315,7 +315,7 @@ async def update_item(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.update_item(
+    return await library_item_service.update_item(
         session,
         actor,
         library_id,
@@ -336,7 +336,7 @@ async def update_item_overrides(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.update_overrides(
+    return await library_item_service.update_overrides(
         session,
         actor,
         library_id,
@@ -355,7 +355,7 @@ async def trash_item(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.set_trash_state(
+    return await library_item_service.set_trash_state(
         session,
         actor,
         library_id,
@@ -374,7 +374,7 @@ async def restore_item(
     actor: CurrentActor,
     _: CsrfProtected,
 ) -> dict[str, object]:
-    return await catalogue_service.set_trash_state(
+    return await library_item_service.set_trash_state(
         session,
         actor,
         library_id,

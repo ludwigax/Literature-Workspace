@@ -1,28 +1,35 @@
 # Literature Workspace
 
-Literature Workspace 是一个网站项目，而不是 Literature 与 Chat 两个独立网站。
-
-当前仓库由原 `literature_workspace_v2` 与 `chat_workspace_v2` 的有效代码整理而来：
+Literature Workspace 是一个网站项目：一个浏览器入口、一个模块化应用后端，以及按职责
+独立运行的后台 worker。
 
 ```text
-frontend/                    唯一的网站前端（当前以 Literature v2 为基础）
-services/literature/         文献、馆藏、Document 与用户身份相关后端
-services/chat/               Chat 会话、消息树、Turn、模型调用与工具执行后端
-prototypes/chat-frontend/    待合并的 Chat 界面原型，不参与最终部署
-docs/                        跨服务架构与迁移决策
+frontend/                    唯一的可部署前端（当前以 Literature v2 为基础）
+services/app/                统一后端：身份、文献领域、Chat API 与 worker
+prototypes/chat-frontend/    Chat 交互原型，仅供后续合并前端时参考
+docs/                        架构与迁移说明
+compose.yaml                 本地统一运行栈
 ```
 
-## 当前状态
+## 当前后端边界
 
-两个后端服务的领域拆分仍然保留，但产品边界调整为：
+- Literature 与 Chat 共用 Principal、WebSession Cookie、CSRF 和同一数据库迁移链。
+- 浏览器只访问一个 API；不存在 Chat 代用户调用 Literature 的身份转借协议。
+- Chat HTTP 路由位于 `/api/chat/v1`，Literature 路由继续位于 `/api/v2`。
+- `chat-worker` 是独立进程，但属于同一应用。它异步领取 Turn，避免模型与工具执行阻塞
+  API 请求；每个用户默认最多同时执行 3 个 Turn。
+- 全局 CanonicalPaper/Document 与用户 Library 投影保持不同权限边界。Chat 的文献检索
+  直接访问 Document Database，DOI 精确查询直接访问全局 CanonicalPaper/Document，均不
+  借道 Library。
 
-- 用户只访问一个前端和一个站点域名。
-- Literature 与 Chat 共用一套登录会话和用户身份。
-- Chat 不拥有第二套用户系统，也不要求用户输入 Principal UUID。
-- Chat 调用 Literature 检索属于服务间调用，不等同于用户认证。
-- `prototypes/chat-frontend` 只用于将已有 Chat 交互逐步移植进 `frontend`。
+## 本地启动
 
-根级 Compose 暂未建立。这是有意为之：在统一认证契约和网关路由确定前，不继续固化
-两个独立站点的部署结构。现有服务各自的 README 与 `.env.example` 保留在对应目录。
+```powershell
+docker compose up --build
+```
 
-下一步见 [docs/architecture.md](docs/architecture.md)。
+网站入口为 `http://127.0.0.1:5174`，API 为 `http://127.0.0.1:8020`。文档处理测试服务使用
+可选的 `document` profile。
+
+更详细的 Literature 领域说明见 `services/app/README.md`，架构决策见
+`docs/architecture.md`。

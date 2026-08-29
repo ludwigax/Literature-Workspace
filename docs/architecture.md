@@ -2,75 +2,61 @@
 
 ## 产品边界
 
-浏览器看到的是一个 Literature Workspace 网站。Chat 是网站中的功能模块，而不是第二个
-产品。前端路由可以表现为 `/library/*`、`/documents/*` 与 `/chat/*`，但它们由同一个前端
-应用提供。
+浏览器看到一个 Literature Workspace 网站。Library、Papers、Documents 与 Chat 是同一
+产品的功能模块，不是独立站点。
 
-## 服务边界
+## 运行边界
 
-保留两个后端服务仍然有价值：
-
-- Literature Service 管理用户资料、系统角色、Library、CanonicalPaper、Document、
-  Pipeline 与检索。
-- Chat Service 管理 Session、Branch、MessageUnit、TurnRun、ModelStep、OutputItem、
-  ToolExecution、并发调度与 SSE。
-
-服务拆分不应产生第二套登录、第二个页面入口或第二份用户真相来源。
-
-## 目标请求路径
+后端采用一个模块化应用、多个运行进程：
 
 ```text
 Browser
-  -> one site / one reverse proxy
-       -> /api/v2/*       -> Literature Service
-       -> /api/chat/v1/*  -> Chat Service
-       -> /*              -> one frontend
+  -> frontend/nginx
+       -> /api/v2/*       -> application API
+       -> /api/chat/v1/*  -> application API
+       -> /*              -> frontend SPA
 
-Chat Worker
-  -> internal Literature API for retrieval and DOI document lookup
+application API ---------> PostgreSQL / MinIO
+metadata-worker ---------> PostgreSQL / external metadata providers
+chat-worker -------------> PostgreSQL / model provider / internal domain services
+document-worker ---------> PostgreSQL / document pipeline
 ```
 
-所有容器最终进入同一个应用级 Compose 网络。浏览器不直接感知容器名或内部端口。
+API 和 worker 使用同一份 `services/app` 代码与同一条 Alembic 迁移链，但使用不同数据库
+角色。模型或工具执行不会占用 API 请求进程；Chat worker 仍可横向扩容，并通过数据库领取
+Turn 和租约协调并发。
 
 ## 统一身份
 
-目前 Literature Service 已拥有 OIDC/Keycloak 登录流程，Chat 的开发身份头只是临时测试
-机制，不能成为网站架构。
+OIDC 登录、Principal、WebSession Cookie 与 CSRF 全部由统一应用拥有。Chat 路由与
+Literature 路由使用同一个认证依赖，不接受开发 Principal header、共享服务令牌或
+“代用户”身份头。
 
-实施时应先确定以下契约：
+用户级并发限制由 Chat 的 Turn 调度层执行，默认同一 Principal 最多运行 3 个 Turn；超过
+限制的会话不创建新的活动 Turn，前端可以呈现忙线等待状态。
 
-1. 浏览器只与统一站点建立登录会话。
-2. 网关或两个 API 使用同一 OIDC issuer 验证用户身份。
-3. 两个服务使用同一个稳定的 subject/principal ID；Chat 数据库只保存该外部 ID，不复制
-   用户资料和角色。
-4. Chat 调用 Literature 时使用服务凭据，并显式传递已验证的用户 subject，用于需要用户
-   语境的操作。
-5. CanonicalPaper 与 Document 的全局读取不错误套用 Library 权限；Library 权限只约束
-   Library 投影与用户自定义内容。
+## 文献权限边界
 
-优先建议让 Chat Service 自己验证同一 OIDC access token/session，而不是每次请求都向
-Literature Service 查询“这个用户是谁”。这样 Literature 故障不会让全部 Chat 请求在身份
-查询处串行阻塞，两个服务也不会形成不必要的同步耦合。
+- CanonicalPaper 与 PipelineDocument 是全局规范数据，不从属于某个 Library。
+- Document Database 是全局检索语料配置；Chat 的 `document_retrieval` 直接查询它。
+- `document_get_by_doi` 直接查询 CanonicalPaper 与 PipelineDocument。
+- Library 是全局论文/文档的用户投影，另含用户自定义文件、覆盖和集合。
+- Library membership 只约束 Library 投影的可见与可修改行为，不能被误用来限制全局文献
+  查询。
 
-## 前端迁移
+## Chat 持久化边界
 
-`frontend` 是唯一目标前端。`prototypes/chat-frontend` 中可复用的部分包括：
+- `MessageUnit`：用户可见聊天树节点。
+- `TurnRun`：从一次用户输入到把输入权交回用户的完整执行。
+- `ModelStep` / `ModelOutputItem`：每次模型 API 调用及其原始输出项。
+- `ToolExecution`：函数工具的一次执行、输入、结果和状态。
 
-- 消息树与分支导航
-- 编辑和重新生成
-- 中断并保留局部回复
-- fetch SSE reader 与 `Last-Event-ID` 游标
-- Turn/ToolExecution 活动栏
-- 严肃蓝 Chat 主题
+消息树引用执行结果，但模型输出项仍独立持久化；编辑、分支和重新生成追加新节点，不原地
+篡改历史执行记录。SSE 断线续传只保证应用 API 到浏览器这一段；上游模型流中断按失败或
+中断状态落库。
 
-迁移时应将这些实现拆成 `frontend/src/features/chat/`，复用现有应用壳、路由、认证状态和
-API client。不得迁移开发 Principal UUID 登录页，也不得迁移第二个 nginx/站点入口。
+## 前端迁移约束
 
-## 推荐实施顺序
-
-1. 明确统一身份 token/session 如何同时到达两个 API。
-2. 在 Chat API 替换开发 Principal header，增加统一认证适配器。
-3. 在唯一前端加入 `/chat` 路由和 Chat feature，并复用现有用户状态。
-4. 建立根级 nginx 与 Compose，将两个 API 和唯一前端放入同一网络。
-5. 将 Chat -> Literature 地址改为容器 DNS，例如 `http://literature-api:8020/api/v2`。
-6. 完成跨服务、SSE、三并发和权限边界测试后，删除 Chat 前端原型。
+`frontend` 是唯一目标前端。`prototypes/chat-frontend` 仅作为消息树、SSE、工具活动栏和
+严肃蓝主题的参考。迁移时复用现有应用壳、认证状态和 API client，不带入旧的 Document
+Database/Pipeline 管理界面，也不建立第二个 nginx 或登录入口。

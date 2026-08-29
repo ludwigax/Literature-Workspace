@@ -4,13 +4,13 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from backend.app.catalogue.service import catalogue_service
 from backend.app.ingestion.identifiers import (
     extract_arxiv_ids,
     select_pdf_identifiers,
 )
 from backend.app.ingestion.pdf_import import PypdfTextExtractor
 from backend.app.ingestion.providers import extract_dois
+from backend.app.papers.service import paper_service
 
 
 @pytest.mark.asyncio
@@ -92,7 +92,7 @@ def test_arxiv_filename_is_a_last_resort_identifier_source() -> None:
 
 
 def test_manual_datacite_arxiv_doi_adds_arxiv_identifier_alias() -> None:
-    identifiers = catalogue_service.normalize_identifiers(
+    identifiers = paper_service.normalize_identifiers(
         [{"scheme": "DOI", "value": "https://doi.org/10.48550/arXiv.2401.12345v2"}]
     )
 

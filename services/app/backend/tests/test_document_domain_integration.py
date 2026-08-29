@@ -12,7 +12,6 @@ from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from sqlalchemy import delete, func, select
 
 from backend.app.assets.storage import StoredObject
-from backend.app.catalogue.service import catalogue_service
 from backend.app.config import get_settings
 from backend.app.database import migration_session_factory, worker_session_factory
 from backend.app.documents.embeddings import document_embedding_service
@@ -47,6 +46,7 @@ from backend.app.documents.sources import (
 from backend.app.documents.sources import PdfTextResult, PdfTextSource
 from backend.app.documents.worker import DocumentWorkerBackend
 from backend.app.jobs.kernel import LeaseWorker
+from backend.app.library_items.service import library_item_service
 from backend.app.main import app
 from backend.app.models import (
     Artifact,
@@ -786,7 +786,7 @@ async def test_release_build_reuse_publish_archive_and_profiles(
         assert [value["filename"] for value in resources["documents"]] == [
             "integration database.md"
         ]
-        summary = await catalogue_service.artifact_summary_map(session, [library_item])
+        summary = await library_item_service.artifact_summary_map(session, [library_item])
         assert summary[library_item.library_item_id]["documents"] == 1
 
         assert (

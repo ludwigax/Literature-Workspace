@@ -18,7 +18,6 @@ from backend.app.authorization.dependencies import (
     Database,
     membership_for,
 )
-from backend.app.catalogue.service import catalogue_service
 from backend.app.collections.service import collection_service
 from backend.app.config import get_settings
 from backend.app.ingestion.citation_import import CITATION_IMPORT_JOB
@@ -27,6 +26,7 @@ from backend.app.ingestion.pdf_import import PDF_IMPORT_JOB
 from backend.app.ingestion.service import metadata_refresh_service
 from backend.app.ingestion.zotero_snapshot import ZOTERO_IMPORT_JOB
 from backend.app.jobs.service import job_service
+from backend.app.library_items.service import library_item_service
 from backend.app.models import (
     Asset,
     BackgroundJob,
@@ -412,7 +412,7 @@ async def import_pdf(
         )
         existing_item = await session.get(LibraryItem, existing_item_id)
         initial_item = (
-            await catalogue_service.view(session, existing_item)
+            await library_item_service.view(session, existing_item)
             if existing_item is not None
             else None
         )
@@ -493,7 +493,7 @@ async def import_pdf(
             "blob_id": str(blob.blob_id),
         },
     )
-    initial_item = await catalogue_service.view(
+    initial_item = await library_item_service.view(
         session,
         initialized.item,
         collection_ids=[collection_id] if collection_id is not None else [],

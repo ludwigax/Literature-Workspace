@@ -28,59 +28,6 @@ class Actor:
 
 async def current_actor(request: Request, session: Database) -> Actor:
     settings = get_settings()
-    service_token = request.headers.get("X-Literature-Service-Token", "")
-    act_as = request.headers.get("X-Act-As-Principal-Id", "")
-    if service_token or act_as:
-        expected = (
-            settings.chat_service_token.get_secret_value()
-            if settings.chat_service_token is not None
-            else ""
-        )
-        if (
-            not expected
-            or not service_token
-            or not hmac.compare_digest(service_token, expected)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="service authentication failed",
-            )
-        try:
-            principal_id = uuid.UUID(act_as)
-        except ValueError as error:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="act-as principal is invalid",
-            ) from error
-        service_row = (
-            await session.execute(
-                select(Principal, PrincipalSystemRole.role)
-                .outerjoin(
-                    PrincipalSystemRole,
-                    PrincipalSystemRole.principal_id == Principal.principal_id,
-                )
-                .where(
-                    Principal.principal_id == principal_id,
-                    Principal.status == "ACTIVE",
-                )
-            )
-        ).one_or_none()
-        if service_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="act-as principal is unavailable",
-            )
-        principal, system_role = service_row
-        await session.execute(
-            text("SELECT set_config('app.principal_id', :principal_id, true)"),
-            {"principal_id": str(principal.principal_id)},
-        )
-        return Actor(
-            principal_id=principal.principal_id,
-            display_name=principal.display_name,
-            session_id=uuid.UUID(int=0),
-            system_role=str(system_role or "USER"),
-        )
     raw_token = request.cookies.get(settings.session_cookie_name, "")
     if not raw_token:
         raise HTTPException(

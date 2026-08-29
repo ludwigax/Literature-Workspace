@@ -17,14 +17,17 @@ from .api.libraries import invitation_router
 from .api.libraries import router as libraries_router
 from .api.resources import router as resources_router
 from .api.tags import router as tags_router
+from .chat.api import router as chat_router
 from .config import get_settings
-from .database import engine
+from .database import chat_worker_engine, engine, worker_engine
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     await engine.dispose()
+    await worker_engine.dispose()
+    await chat_worker_engine.dispose()
 
 
 def create_app() -> FastAPI:
@@ -54,6 +57,7 @@ def create_app() -> FastAPI:
     application.include_router(tags_router, prefix="/api/v2")
     application.include_router(documents_router, prefix="/api/v2")
     application.include_router(document_admin_router, prefix="/api/v2")
+    application.include_router(chat_router, prefix="/api/chat/v1", tags=["chat"])
     return application
 
 

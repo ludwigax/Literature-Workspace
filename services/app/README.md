@@ -430,17 +430,17 @@ npm run build
 - Auto Reconcile 时间配置、补偿、范围变化审计和管理员通知。
 - Document/Chunk Search 与 Metadata Search 的入口是否合并，待真实使用后决定。
 
-### 下一阶段接口约束（不在本文设计 Chat）
+### Chat 与文献领域的接口约束
 
 - Chat/Work 只使用 CURRENT Release，请求显式传 Document Database ID。
-- Chat Tool 可复用 `/retrieval/search`，再按 `document_id` 取全文；消息引用快照由 Chat 系统决定。
+- Chat 文献工具直接调用同一应用内的领域服务；消息引用快照由 Chat 系统决定。
 - DOI 精确取文档使用全局 `/canonical-papers/by-doi`，从 CanonicalPaper 查询其
   PipelineDocument，不经过 Library，也不要求论文已存在于用户馆藏。
-- Chat Worker 可使用 `X-Literature-Service-Token` 与 `X-Act-As-Principal-Id`
-  进行服务调用；只有配置了 `LITV2_CHAT_SERVICE_TOKEN` 才启用。Library 接口仍以目标
-  Principal 执行 membership 校验；全局 CanonicalPaper、Document 与 Retrieval 接口不受
-  Library membership 约束。该凭据不是管理员入口，生产环境应由正式的服务身份或
-  token exchange 替换本地共享密钥。
+- Chat HTTP API 与 Literature API 共用 WebSession Cookie、CSRF 和 Principal，不支持
+  服务令牌代用户访问或 `X-Act-As-Principal-Id` 身份模拟。
+- Chat Worker 是同一应用的独立执行进程，通过受限数据库角色领取 Turn。检索只访问
+  全局 Document Database；DOI 查询只访问 CanonicalPaper 与 Document，不经过 Library
+  投影或 Library membership 权限。
 - 是否限制为用户 Library Item 必须显式选择，不能默认把全局语料缩成用户收藏。
 - 历史引用对应资源失效时应降级显示缺失，不让历史消息崩溃。
 

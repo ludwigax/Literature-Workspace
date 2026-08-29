@@ -15,8 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record_audit_event
 from ..authorization.dependencies import Actor, membership_for
 from ..collections.service import collection_service
-from ..ingestion.identifiers import arxiv_id_from_datacite_doi, normalize_arxiv
-from ..ingestion.providers import normalize_doi
 from ..models import (
     Artifact,
     Asset,
@@ -29,6 +27,7 @@ from ..models import (
     ItemTag,
     LibraryItem,
 )
+from ..papers.service import paper_service
 from ..tags.service import tag_service
 
 EDITABLE_METADATA_KEYS = {
@@ -55,7 +54,7 @@ EDITABLE_METADATA_KEYS = {
 }
 
 
-class CatalogueService:
+class LibraryItemService:
     async def create_item(
         self,
         session: AsyncSession,
@@ -74,7 +73,7 @@ class CatalogueService:
         title = str(metadata.get("title") or "").strip()
         if not title:
             raise HTTPException(status_code=422, detail="title is required")
-        normalized_identifiers = self.normalize_identifiers(identifiers)
+        normalized_identifiers = paper_service.normalize_identifiers(identifiers)
         if normalized_identifiers:
             lock_key = "\x1f".join(
                 f"{scheme}:{value}" for scheme, value, _ in normalized_identifiers
@@ -83,9 +82,9 @@ class CatalogueService:
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                 {"key": lock_key},
             )
-        paper = await self.resolve_canonical(session, normalized_identifiers)
+        paper = await paper_service.resolve(session, normalized_identifiers)
         if paper is None:
-            paper = await self.create_canonical(
+            paper = await paper_service.create(
                 session,
                 actor,
                 metadata=metadata,
@@ -938,30 +937,7 @@ class CatalogueService:
         session: AsyncSession,
         identifiers: list[tuple[str, str, str]],
     ) -> CanonicalPaper | None:
-        if not identifiers:
-            return None
-        matches = list(
-            await session.scalars(
-                select(CanonicalIdentifier).where(
-                    or_(
-                        *[
-                            (CanonicalIdentifier.scheme == scheme)
-                            & (CanonicalIdentifier.normalized_value == normalized)
-                            for scheme, normalized, _ in identifiers
-                        ]
-                    )
-                )
-            )
-        )
-        paper_ids = {match.canonical_paper_id for match in matches}
-        if len(paper_ids) > 1:
-            raise HTTPException(status_code=409, detail="Identifiers resolve to different Papers")
-        if not paper_ids:
-            return None
-        paper = await session.get(CanonicalPaper, next(iter(paper_ids)))
-        if paper is None or paper.status != "ACTIVE":
-            raise HTTPException(status_code=409, detail="Canonical Paper is not active")
-        return paper
+        return await paper_service.resolve(session, identifiers)
 
     async def create_canonical(
         self,
@@ -971,48 +947,9 @@ class CatalogueService:
         metadata: dict[str, Any],
         identifiers: list[tuple[str, str, str]],
     ) -> CanonicalPaper:
-        paper = CanonicalPaper(status="ACTIVE")
-        session.add(paper)
-        await session.flush()
-        current_metadata = CanonicalMetadata(
-            canonical_paper_id=paper.canonical_paper_id,
-            metadata_source="UNDEFINED",
-            title=str(metadata["title"]).strip(),
-            abstract=self.optional_text(metadata.get("abstract")),
-            publication_year=metadata.get("publication_year"),
-            publication_month=metadata.get("publication_month"),
-            publication_day=metadata.get("publication_day"),
-            publication_date=self.parse_date(metadata.get("publication_date")),
-            publication_date_precision=metadata.get("publication_date_precision"),
-            work_type=self.optional_text(metadata.get("work_type")),
-            venue=self.optional_text(metadata.get("venue")),
-            canonical_url=self.optional_text(metadata.get("canonical_url")),
-            publisher=self.optional_text(metadata.get("publisher")),
-            volume=self.optional_text(metadata.get("volume")),
-            issue=self.optional_text(metadata.get("issue")),
-            pages=self.optional_text(metadata.get("pages")),
-            article_number=self.optional_text(metadata.get("article_number")),
-            language=self.optional_text(metadata.get("language")),
-            issn=list(metadata.get("issn") or []),
-            isbn=list(metadata.get("isbn") or []),
-            authors=list(metadata.get("authors") or []),
-            extra=dict(metadata.get("extra") or {}),
-            provenance=dict(metadata.get("provenance") or {"source": "import"}),
-            revision=1,
-            updated_by=actor.principal_id,
+        return await paper_service.create(
+            session, actor, metadata=metadata, identifiers=identifiers
         )
-        session.add(current_metadata)
-        for scheme, normalized, original in identifiers:
-            session.add(
-                CanonicalIdentifier(
-                    canonical_paper_id=paper.canonical_paper_id,
-                    scheme=scheme,
-                    normalized_value=normalized,
-                    original_value=original,
-                )
-            )
-        await session.flush()
-        return paper
 
     async def require_item(
         self,
@@ -1358,48 +1295,7 @@ class CatalogueService:
 
     @staticmethod
     def normalize_identifiers(values: list[dict[str, str]]) -> list[tuple[str, str, str]]:
-        result: list[tuple[str, str, str]] = []
-        seen: set[tuple[str, str]] = set()
-        for value in values:
-            scheme = str(value.get("scheme") or "").strip().upper()
-            original = str(value.get("value") or "").strip()
-            if scheme not in {"DOI", "PMID", "ARXIV", "ISBN", "OTHER"} or not original:
-                raise HTTPException(status_code=422, detail="invalid scholarly identifier")
-            normalized = original.casefold()
-            if scheme == "DOI":
-                try:
-                    normalized = normalize_doi(original)
-                except ValueError as error:
-                    raise HTTPException(status_code=422, detail="invalid DOI") from error
-                arxiv_id = arxiv_id_from_datacite_doi(normalized)
-                if arxiv_id is not None:
-                    normalized = f"10.48550/arxiv.{arxiv_id}"
-                    arxiv_key = ("ARXIV", arxiv_id)
-                    if arxiv_key not in seen:
-                        seen.add(arxiv_key)
-                        result.append(("ARXIV", arxiv_id, original))
-            elif scheme == "PMID":
-                normalized = "".join(character for character in original if character.isdigit())
-                if not normalized:
-                    raise HTTPException(status_code=422, detail="invalid PMID")
-            elif scheme == "ARXIV":
-                try:
-                    normalized = normalize_arxiv(original)
-                except ValueError as error:
-                    raise HTTPException(
-                        status_code=422, detail="invalid arXiv identifier"
-                    ) from error
-            elif scheme == "ISBN":
-                normalized = "".join(
-                    character
-                    for character in original.upper()
-                    if character.isdigit() or character == "X"
-                )
-            key = (scheme, normalized)
-            if key not in seen:
-                seen.add(key)
-                result.append((scheme, normalized, original))
-        return result
+        return paper_service.normalize_identifiers(values)
 
     @staticmethod
     def normalize_overrides(values: dict[str, Any], *, allow_removal: bool) -> dict[str, Any]:
@@ -1414,21 +1310,8 @@ class CatalogueService:
             result["title"] = str(result["title"]).strip()
         return result
 
-    @staticmethod
-    def optional_text(value: Any) -> str | None:
-        text_value = str(value or "").strip()
-        return text_value or None
+library_item_service = LibraryItemService()
 
-    @staticmethod
-    def parse_date(value: Any) -> date | None:
-        if value in {None, ""}:
-            return None
-        if isinstance(value, date):
-            return value
-        try:
-            return date.fromisoformat(str(value))
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail="invalid publication_date") from error
-
-
-catalogue_service = CatalogueService()
+# Transitional compatibility for older internal imports. New code should import
+# ``library_item_service`` from the top-level ``library_items`` domain.
+catalogue_service = library_item_service

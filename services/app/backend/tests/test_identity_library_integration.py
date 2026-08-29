@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient, ConnectTimeout, MockTransport, Request, Response
-from pydantic import SecretStr
 from sqlalchemy import delete, select, text
 
 from backend.app.assets.service import artifact_service
@@ -151,38 +150,22 @@ def authenticated_client(browser_session: BrowserSession) -> AsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_chat_service_can_act_as_an_existing_principal(identity_prefix: str) -> None:
+async def test_legacy_service_identity_headers_are_rejected(identity_prefix: str) -> None:
     browser_session = await provision_browser_session(
         subject=f"{identity_prefix}-chat-service",
         email=f"{identity_prefix}-chat-service@example.test",
         name="Chat Service User",
     )
-    settings = get_settings()
-    previous = settings.chat_service_token
-    settings.chat_service_token = SecretStr("test-chat-service-token")
-    try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            response = await client.get(
-                "/api/v2/libraries",
-                headers={
-                    "X-Literature-Service-Token": "test-chat-service-token",
-                    "X-Act-As-Principal-Id": str(browser_session.principal.principal_id),
-                },
-            )
-            rejected = await client.get(
-                "/api/v2/libraries",
-                headers={
-                    "X-Literature-Service-Token": "wrong-token",
-                    "X-Act-As-Principal-Id": str(browser_session.principal.principal_id),
-                },
-            )
-    finally:
-        settings.chat_service_token = previous
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/v2/libraries",
+            headers={
+                "X-Literature-Service-Token": "obsolete-token",
+                "X-Act-As-Principal-Id": str(browser_session.principal.principal_id),
+            },
+        )
 
-    assert response.status_code == 200, response.text
-    assert rejected.status_code == 401
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

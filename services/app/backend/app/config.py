@@ -50,7 +50,29 @@ class Settings(BaseSettings):
     session_cookie_name: str = "litv2_session"
     csrf_cookie_name: str = "litv2_csrf"
     bootstrap_admin_emails: str = ""
-    chat_service_token: SecretStr | None = None
+    chat_worker_database_url: str = (
+        "postgresql+psycopg://chat_worker:chat-worker-local@127.0.0.1:5433/literature_v2"
+    )
+    chat_provider: Literal["fake", "openai"] = "fake"
+    chat_model: str = "fake-chat-model"
+    chat_openai_api_key: SecretStr | None = None
+    chat_openai_base_url: str | None = None
+    chat_openai_organization: str | None = None
+    chat_openai_project: str | None = None
+    chat_openai_timeout_seconds: float = Field(default=300.0, ge=1.0, le=3600.0)
+    chat_fake_response_prefix: str = "Fake response"
+    chat_fake_stream_delay_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
+    chat_worker_poll_seconds: float = Field(default=0.25, ge=0.05, le=60.0)
+    chat_sse_poll_seconds: float = Field(default=0.25, ge=0.05, le=10.0)
+    chat_sse_heartbeat_seconds: float = Field(default=15.0, ge=1.0, le=120.0)
+    chat_turn_lease_seconds: int = Field(default=120, ge=15, le=7200)
+    chat_worker_max_concurrency: int = Field(default=32, ge=1, le=1000)
+    chat_principal_max_concurrency: int = Field(default=3, ge=1, le=100)
+    chat_max_tool_calls_ceiling: int = Field(default=100, ge=0, le=1000)
+    chat_retrieval_mode: Literal["BM25", "VECTOR", "HYBRID"] = "HYBRID"
+    chat_retrieval_top_k: int = Field(default=20, ge=1, le=100)
+    chat_chunk_top_k_per_document: int = Field(default=5, ge=1, le=20)
+    chat_doi_document_max_chars: int = Field(default=20_000, ge=1_000, le=100_000)
 
     s3_endpoint_url: str = "http://127.0.0.1:9002"
     s3_public_endpoint_url: str = "http://127.0.0.1:9002"

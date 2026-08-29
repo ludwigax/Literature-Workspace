@@ -8,13 +8,13 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.authorization.dependencies import Actor
-from backend.app.catalogue.service import catalogue_service
 from backend.app.models import (
     CanonicalMetadata,
     CollectionItem,
     ItemTag,
     LibraryItem,
 )
+from backend.app.papers.service import paper_service
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ class LimitedItemService:
         collection_ids: list[uuid.UUID] | None = None,
         tag_ids: list[uuid.UUID] | None = None,
     ) -> LimitedItemResult:
-        normalized_identifiers = catalogue_service.normalize_identifiers(
+        normalized_identifiers = paper_service.normalize_identifiers(
             identifiers
             if identifiers is not None
             else [{"scheme": "DOI", "value": doi}]
@@ -51,9 +51,9 @@ class LimitedItemService:
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                 {"key": f"identifier:{scheme}:{normalized}"},
             )
-        paper = await catalogue_service.resolve_canonical(session, normalized_identifiers)
+        paper = await paper_service.resolve(session, normalized_identifiers)
         if paper is None:
-            paper = await catalogue_service.create_canonical(
+            paper = await paper_service.create(
                 session,
                 actor,
                 metadata=metadata,
