@@ -1,0 +1,59 @@
+{
+  "realm": "literature-v2",
+  "enabled": true,
+  "displayName": "Literature Workspace v2 (local)",
+  "registrationAllowed": true,
+  "resetPasswordAllowed": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "registrationEmailAsUsername": true,
+  "clients": [
+    {
+      "clientId": "literature-v2-web",
+      "name": "Literature Workspace v2 Web",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-development-only",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "redirectUris": [
+        "http://127.0.0.1:8020/api/v2/auth/callback",
+        "http://127.0.0.1:5174/api/v2/auth/callback",
+        "http://localhost:8020/api/v2/auth/callback",
+        "http://localhost:5174/api/v2/auth/callback",
+        "http://223.109.141.102:6013/api/v2/auth/callback"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+        "http://223.109.141.102:6013"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://127.0.0.1:5174/*##http://localhost:5174/*##http://223.109.141.102:6013/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "f79dc22b-d7b4-46bd-bf4a-4e79cda0caae",
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@example.test",
+      "firstName": "Alice",
+      "lastName": "Researcher",
+      "credentials": [{"type": "password", "value": "alice-local", "temporary": false}]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@example.test",
+      "firstName": "Bob",
+      "lastName": "Researcher",
+      "credentials": [{"type": "password", "value": "bob-local", "temporary": false}]
+    }
+  ]
+}
