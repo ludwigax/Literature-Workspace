@@ -29,7 +29,8 @@ docker compose up --build
 ```
 
 网站入口为 `http://127.0.0.1:5174`，API 为 `http://127.0.0.1:8020`。文档处理测试服务使用
-可选的 `document` profile。
+可选的 `document` profile。登录后可从网站导航进入 `/chat`；Chat 会复用同一登录会话，
+不会要求输入 Principal ID。
 
 更详细的 Literature 领域说明见 `services/app/README.md`，架构决策见
 `docs/architecture.md`。

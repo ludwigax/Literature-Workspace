@@ -1761,6 +1761,10 @@ export function App() {
           <span className="brand-mark">LW</span>
           <div><strong>Literature</strong><span>Library v2</span></div>
         </div>
+        <nav className="service-nav" aria-label="Workspace services">
+          <a className="active" href="/">Library</a>
+          <a href="/chat">Chat</a>
+        </nav>
         <div className="library-list">
           <span className="section-label">LIBRARIES</span>
           {libraries.map((library) => (
@@ -1816,6 +1820,7 @@ export function App() {
                 Overview
               </button>
               <a href="/retrieval">Retrieval</a>
+              <a href="/chat">Chat</a>
               {session?.principal.system_role === "ADMIN" && (
                 <a href="/documents/admin">Document admin</a>
               )}

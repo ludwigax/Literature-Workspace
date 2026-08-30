@@ -17,6 +17,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .brand div, .account-block div { display: flex; flex-direction: column; gap: 2px; }
 .brand strong { font-size: 15px; letter-spacing: -.01em; }
 .brand span:not(.brand-mark), .account-block span { font-size: 11px; color: #768079; }
+.service-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: -10px 4px 22px; border-bottom: 1px solid #d9dfda; padding-bottom: 10px; }
+.service-nav a { border: 1px solid transparent; color: #68766f; padding: 7px 9px; text-align: center; text-decoration: none; font-size: 10px; }
+.service-nav a:hover { background: #edf1eb; color: #285e4b; }
+.service-nav a.active { border-color: #c6d2ca; background: #e8efea; color: #245742; font-weight: 650; }
 .section-label, .eyebrow { color: #65726b; font-size: 10px; font-weight: 750; letter-spacing: .14em; }
 .section-label { padding: 0 8px 9px; }
 .library-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
